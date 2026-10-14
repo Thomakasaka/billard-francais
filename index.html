@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#174f3c">
+<meta name="description" content="Carnet de billard français : scores, reprises, séries et statistiques.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Billard français — Moi & Papa</title>
+<style>
+:root{color-scheme:light dark;--green:#20634a;--gold:#c79d50}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:Canvas;color:CanvasText}
+main{max-width:760px;margin:auto;padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+.hero{background:linear-gradient(135deg,#174f3c,#102c25);color:#fff;padding:20px;border-radius:18px;margin:0 0 14px}
+.hero .eyebrow{font-size:10px;letter-spacing:1.5px;font-weight:800;opacity:.85}
+.hero h1{font-size:26px;margin:6px 0;color:#fff}.hero p{font-size:12px;color:#d1e9db;margin:0}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+button,input,select{font:inherit}
+button{cursor:pointer}
+.tab,.secondary{border:1px solid color-mix(in srgb,CanvasText 18%,transparent);border-radius:10px;padding:11px 7px;background:color-mix(in srgb,Canvas 94%,CanvasText 6%);color:CanvasText;font-size:12px;font-weight:700}
+.tab.active,.primary{background:var(--green);color:white;border-color:var(--green)}
+.panel{display:none}.panel.active{display:block}
+.card{border:1px solid color-mix(in srgb,CanvasText 16%,transparent);border-radius:14px;padding:14px;margin-bottom:12px;background:color-mix(in srgb,Canvas 97%,CanvasText 3%)}
+h2{font-size:17px;margin:0 0 12px}
+label{display:block;font-size:12px;font-weight:750;margin:10px 0 5px}
+input,select{width:100%;min-width:0;padding:11px;border:1px solid color-mix(in srgb,CanvasText 23%,transparent);border-radius:9px;background:Canvas;color:CanvasText}
+.shared{padding:12px;background:color-mix(in srgb,CanvasText 5%,Canvas);border-radius:12px;margin-bottom:12px}
+.shared input{text-align:center;font-size:23px;font-weight:800}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.player{border:1px solid color-mix(in srgb,CanvasText 17%,transparent);border-radius:12px;padding:10px;min-width:0}
+.player:first-child{border-top:3px solid var(--gold)}.player:last-child{border-top:3px solid #438ac4}
+.playername{font-weight:800;overflow-wrap:anywhere;margin-bottom:6px}
+.points{font-size:23px;font-weight:800;text-align:center}
+.avg{font-size:12px;text-align:center;margin-top:8px;opacity:.8}
+.primary{width:100%;padding:13px;border:0;border-radius:10px;font-weight:800;margin-top:12px}
+.note{font-size:12px;line-height:1.6;opacity:.78;margin:10px 0 0}
+.settings,.metrics{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.metric{padding:11px;background:color-mix(in srgb,CanvasText 5%,Canvas);border-radius:10px}
+.metric span{display:block;font-size:11px;opacity:.7}.metric strong{display:block;font-size:23px;margin-top:4px;overflow-wrap:anywhere}
+.rank{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid color-mix(in srgb,CanvasText 15%,transparent)}
+.rank:last-child{border-bottom:0}.rank small{display:block;font-size:11px;opacity:.7;margin-top:4px}.rank strong:last-child{text-align:right}
+.match{border:1px solid color-mix(in srgb,CanvasText 17%,transparent);border-radius:12px;padding:12px;margin-bottom:9px}
+.topline{display:flex;justify-content:space-between;gap:8px;font-size:11px;opacity:.72}
+.scores{display:grid;grid-template-columns:1fr auto 1fr;gap:5px;align-items:center;text-align:center;margin:12px 0}
+.scores strong{display:block;font-size:23px}.scores small{display:block;font-size:11px;opacity:.72;margin-top:4px}
+.actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:10px}
+.empty{text-align:center;padding:22px 8px;opacity:.7;font-size:13px}
+.notice{padding:10px;border-radius:9px;background:color-mix(in srgb,CanvasText 6%,Canvas);font-size:12px;line-height:1.6;margin:10px 0}
+.warning{border-left:3px solid var(--gold);padding-left:10px}
+.toast{font-size:12px;padding:10px;border-radius:9px;background:color-mix(in srgb,CanvasText 6%,Canvas);margin-bottom:10px}
+.win{color:#37956a}
+@media(min-width:520px){.metrics{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<main id="app">
+<header class="hero"><div class="eyebrow">CARNET DE MATCHS</div><h1>Billard français</h1><p>Scores · Reprises · Séries · Moyennes</p></header>
+<nav class="tabs" aria-label="Navigation"><button class="tab active" data-tab="saisie">＋ Partie</button><button class="tab" data-tab="stats">↗ Statistiques</button><button class="tab" data-tab="historique">☷ Historique</button></nav>
+<div id="message" aria-live="polite"></div>
+<section class="panel active" id="panel-saisie">
+<div class="card">
+<h2 id="form-title">Enregistrer une partie</h2>
+<label for="date">Date</label><input id="date" type="date">
+<div class="shared"><label for="reps">Nombre de reprises commun aux deux joueurs</label><input id="reps" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex. 25"><div class="note">Une seule valeur de reprises pour toute la partie.</div></div>
+<div class="players">
+<div class="player"><div class="playername" id="name0-label">Moi</div><label for="p0">Points réalisés</label><input class="points" id="p0" type="number" min="0" step="1" inputmode="numeric" placeholder="0"><label for="s0">Plus grande série</label><input id="s0" type="number" min="0" step="1" inputmode="numeric" placeholder="Ex. 8"><div class="avg" id="avg0">Moyenne : —</div></div>
+<div class="player"><div class="playername" id="name1-label">Papa</div><label for="p1">Points réalisés</label><input class="points" id="p1" type="number" min="0" step="1" inputmode="numeric" placeholder="0"><label for="s1">Plus grande série</label><input id="s1" type="number" min="0" step="1" inputmode="numeric" placeholder="Ex. 12"><div class="avg" id="avg1">Moyenne : —</div></div>
+</div>
+<label for="note">Note (facultatif)</label><input id="note" maxlength="180" placeholder="Ex. belle remontée, série de 8…">
+<button class="primary" id="save">Enregistrer la partie</button><button class="secondary" id="cancel" style="display:none;width:100%;margin-top:8px">Annuler la modification</button>
+<p class="note">Moyenne = points réalisés ÷ reprises. La plus grande série est le maximum de points réalisés consécutivement pendant une reprise.</p>
+</div>
+<div class="card"><h2>Noms des joueurs</h2><div class="settings"><div><label for="n0">Joueur 1</label><input id="n0" maxlength="24" value="Moi"></div><div><label for="n1">Joueur 2</label><input id="n1" maxlength="24" value="Papa"></div></div><button class="secondary" id="save-names" style="margin-top:10px">Enregistrer les noms</button></div>
+</section>
+<section class="panel" id="panel-stats">
+<div class="card"><h2>Bilan général</h2><div class="metrics"><div class="metric"><span>Parties</span><strong id="count">0</strong></div><div class="metric"><span>Victoires J1</span><strong id="wins0">0</strong></div><div class="metric"><span>Victoires J2</span><strong id="wins1">0</strong></div><div class="metric"><span>Égalités</span><strong id="draws">0</strong></div></div></div>
+<div class="card"><h2>Moyenne générale</h2><div id="avg-stats"></div><p class="note">Total des points ÷ total des reprises. Les anciennes parties importées sans reprises communes restent signalées jusqu'à correction.</p></div>
+<div class="card"><h2>Total des points</h2><div id="total-stats"></div></div>
+<div class="card"><h2>Meilleures séries</h2><div id="series-stats"></div></div>
+<div class="card"><h2>Meilleures moyennes sur une partie</h2><div id="best-stats"></div></div>
+<div class="card"><h2>Progression des moyennes</h2><label for="chart-player">Joueur</label><select id="chart-player"><option value="0">Moi</option><option value="1">Papa</option></select><div id="chart" style="margin-top:12px"></div></div>
+</section>
+<section class="panel" id="panel-historique">
+<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h2 style="margin:0">Toutes les parties</h2><button class="secondary" id="export">Exporter JSON</button></div><div id="legacy-notice" class="notice warning" style="display:none"></div>
+<label for="filter">Période</label><select id="filter"><option value="all">Toutes les parties</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option><option value="365">12 derniers mois</option></select><div id="history" style="margin-top:12px"></div></div>
+<div class="card"><h2>Sauvegarde et restauration</h2><p class="note">Exporte tes données régulièrement. Pour transférer l'historique d'une autre version, importe son fichier JSON ici.</p><button class="secondary" id="import-trigger">Importer une sauvegarde JSON</button><input id="import-file" type="file" accept=".json,application/json" style="display:none;margin-top:10px"><button class="secondary" id="reset" style="margin-top:12px">Effacer toutes les parties</button></div>
+</section>
+</main>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id),KEY='billard_francais_carnet_v1';
+let games=[],names=['Moi','Papa'],editing=null;
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Number(n).toLocaleString('fr-FR',{maximumFractionDigits:3});
+const reps=g=>Number.isSafeInteger(g.r)&&g.r>0?g.r:null;
+const repsFor=(g,k)=>reps(g)??Number(g['r'+k]||0);
+const seriesFor=(g,k)=>Number(g['s'+k]??g['max'+k]??0);
+const mean=(p,r)=>r>0?p/r:null;
+function say(t){$('message').innerHTML='<div class="toast">'+esc(t)+'</div>';setTimeout(()=>{$('message').innerHTML=''},3500)}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify({version:2,games,names}))}catch(e){say('Sauvegarde locale impossible. Exporte tes données.')}}
+function syncNames(){for(let i=0;i<2;i++){$('name'+i+'-label').textContent=names[i];$('n'+i).value=names[i];$('chart-player').options[i].text=names[i]}}
+function ordered(){return [...games].sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id)}
+function stat(k){let p=0,r=0,w=0,bestMean=null,bestSeries=0;games.forEach(g=>{p+=Number(g['p'+k]||0);r+=repsFor(g,k);if((k===0&&g.pa>g.pb)||(k===1&&g.pb>g.pa))w++;let m=mean(g['p'+k],repsFor(g,k));if(m!==null&&(!bestMean||m>bestMean.value))bestMean={value:m,game:g};if(seriesFor(g,k)>bestSeries)bestSeries=seriesFor(g,k)});return{p,r,avg:mean(p,r),w,bestMean,bestSeries}}
+function legacy(g){return !reps(g)}
+function card(g,editable){const ra=repsFor(g,0),rb=repsFor(g,1),a=mean(g.pa,ra),b=mean(g.pb,rb),result=g.pa===g.pb?'Égalité':g.pa>g.pb?names[0]+' gagne':names[1]+' gagne';return `<article class="match"><div class="topline"><span>${esc(g.date)}</span><span>${esc(result)}</span></div>${legacy(g)?'<div class="notice warning">Ancienne partie : corrige manuellement le nombre commun de reprises.</div>':''}<div class="scores"><div><strong>${fmt(g.pa)}</strong><small>${esc(names[0])}</small><small>Moy. ${fmt(a||0)} · série ${fmt(seriesFor(g,0))}</small></div><div>VS</div><div><strong>${fmt(g.pb)}</strong><small>${esc(names[1])}</small><small>Moy. ${fmt(b||0)} · série ${fmt(seriesFor(g,1))}</small></div></div><div class="note" style="text-align:center">${legacy(g)?'Reprises anciennes : '+ra+' / '+rb:'Reprises communes : '+reps(g)}${g.note?' · '+esc(g.note):''}</div>${editable?`<div class="actions"><button class="secondary" data-edit="${g.id}">Corriger / modifier</button><button class="secondary" data-del="${g.id}">Supprimer</button></div>`:''}</article>`}
+function rank(name,value,sub){return `<div class="rank"><div><strong>${esc(name)}</strong><small>${sub}</small></div><strong>${value}</strong></div>`}
+function render(){syncNames();const A=stat(0),B=stat(1);$('count').textContent=games.length;$('wins0').textContent=A.w;$('wins1').textContent=B.w;$('draws').textContent=games.filter(g=>g.pa===g.pb).length;
+$('avg-stats').innerHTML=[A,B].map((s,i)=>rank(names[i],fmt(s.avg||0),'Total : '+fmt(s.p)+' points / '+fmt(s.r)+' reprises')).join('');
+$('total-stats').innerHTML=[A,B].map((s,i)=>rank(names[i],fmt(s.p)+' pts',s.w+' victoire(s)')).join('');
+$('series-stats').innerHTML=[A,B].map((s,i)=>{const g=games.filter(x=>seriesFor(x,i)===s.bestSeries&&s.bestSeries>0).sort((x,y)=>y.date.localeCompare(x.date))[0];return rank(names[i],fmt(s.bestSeries)+' pts',g?'Meilleure série · '+g.date:'Aucune série enregistrée')}).join('');
+$('best-stats').innerHTML=[A,B].map((s,i)=>rank(names[i],s.bestMean?fmt(s.bestMean.value):'—',s.bestMean?'Le '+s.bestMean.game.date+' · '+s.bestMean.game['p'+i]+' points en '+repsFor(s.bestMean.game,i)+' reprises':'Aucune partie')).join('');
+const old=games.filter(legacy).length;$('legacy-notice').style.display=old?'block':'none';$('legacy-notice').textContent=old+' ancienne(s) partie(s) à corriger : ouvre chacune avec « Corriger / modifier » pour renseigner le nombre commun de reprises et les séries.';
+const sorted=ordered().reverse(),f=$('filter').value,cut=new Date();cut.setDate(cut.getDate()-Number(f));const list=sorted.filter(g=>f==='all'||g.date>=cut.toISOString().slice(0,10));$('history').innerHTML=list.length?list.map(g=>card(g,true)).join(''):'<div class="empty">Aucune partie enregistrée.</div>';drawChart()}
+function drawChart(){const k=Number($('chart-player').value),arr=ordered().filter(g=>repsFor(g,k)>0);if(!arr.length){$('chart').innerHTML='<div class="empty">Les moyennes apparaîtront ici.</div>';return}const vals=arr.map(g=>g['p'+k]/repsFor(g,k)),max=Math.max(...vals,.1),w=320,h=145,l=30,t=12,iw=282,ih=95,pts=vals.map((v,i)=>[l+(vals.length===1?iw/2:i*iw/(vals.length-1)),t+ih-v/max*ih]);let s=`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Progression des moyennes">`;for(let i=0;i<3;i++){const y=t+i*ih/2;s+=`<line x1="${l}" y1="${y}" x2="312" y2="${y}" stroke="color-mix(in srgb,CanvasText 18%,transparent)"/><text x="25" y="${y+3}" text-anchor="end" font-size="9" fill="CanvasText">${fmt(max*(1-i/2))}</text>`}if(pts.length>1)s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#38966a" stroke-width="2.5"/>`;pts.forEach((p,i)=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#38966a"><title>${esc(arr[i].date)} : ${fmt(vals[i])}</title></circle>`);s+=`<text x="${l}" y="139" font-size="9" fill="CanvasText">${esc(arr[0].date)}</text><text x="312" y="139" text-anchor="end" font-size="9" fill="CanvasText">${esc(arr[arr.length-1].date)}</text></svg>`;$('chart').innerHTML=s}
+function preview(){const r=Number($('reps').value);for(let i=0;i<2;i++){const p=$('p'+i).value;$('avg'+i).textContent=p!==''&&r>0?'Moyenne : '+fmt(Number(p)/r):'Moyenne : —'}}
+function clearForm(){editing=null;$('form-title').textContent='Enregistrer une partie';$('save').textContent='Enregistrer la partie';$('cancel').style.display='none';$('date').value=today();['reps','p0','p1','s0','s1','note'].forEach(id=>$(id).value='');preview()}
+function integer(id,min){const v=$(id).value;return v!==''&&Number.isSafeInteger(Number(v))&&Number(v)>=min}
+document.querySelectorAll('#app [data-tab]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#app .tab').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('#app .panel').forEach(x=>x.classList.toggle('active',x.id==='panel-'+b.dataset.tab));render()}));
+['reps','p0','p1','s0','s1'].forEach(id=>$(id).addEventListener('input',preview));
+$('save').addEventListener('click',()=>{if(!$('date').value){say('Choisis la date.');return}if(!integer('reps',1)){say('Indique un nombre commun de reprises supérieur à zéro.');return}for(let i=0;i<2;i++){if(!integer('p'+i,0)){say('Les points doivent être des nombres entiers positifs ou nuls.');return}if(!integer('s'+i,0)){say('Indique la plus grande série de chaque joueur.');return}if(Number($('s'+i).value)>Number($('p'+i).value)){say('La plus grande série ne peut pas dépasser le total des points.');return}}
+const g={id:editing??Date.now(),date:$('date').value,r:Number($('reps').value),pa:Number($('p0').value),pb:Number($('p1').value),s0:Number($('s0').value),s1:Number($('s1').value),note:$('note').value.trim().slice(0,180)};const i=games.findIndex(x=>x.id===g.id);if(i>=0){games[i]={...games[i],...g};delete games[i].ra;delete games[i].rb;delete games[i].maxa;delete games[i].maxb}else games.push(g);persist();render();clearForm();say(i>=0?'Partie corrigée et enregistrée.':'Partie enregistrée !')});
+$('cancel').addEventListener('click',clearForm);
+$('save-names').addEventListener('click',()=>{const a=$('n0').value.trim(),b=$('n1').value.trim();if(!a||!b||a.toLocaleLowerCase()===b.toLocaleLowerCase()){say('Entre deux noms différents.');return}names=[a.slice(0,24),b.slice(0,24)];persist();render();say('Noms mis à jour.')});
+$('chart-player').addEventListener('change',drawChart);$('filter').addEventListener('change',render);
+$('history').addEventListener('click',e=>{const ed=e.target.closest('[data-edit]'),del=e.target.closest('[data-del]');if(ed){const g=games.find(x=>x.id===Number(ed.dataset.edit));if(!g)return;editing=g.id;$('form-title').textContent='Corriger / modifier une partie';$('save').textContent='Enregistrer les modifications';$('cancel').style.display='block';$('date').value=g.date;$('p0').value=g.pa;$('p1').value=g.pb;$('s0').value=seriesFor(g,0);$('s1').value=seriesFor(g,1);$('note').value=g.note||'';$('reps').value=reps(g)??'';if(!reps(g))say('Ancienne partie : renseigne manuellement le nombre commun de reprises.');preview();document.querySelector('#app [data-tab="saisie"]').click();window.scrollTo({top:0,behavior:'smooth'})}if(del){const id=Number(del.dataset.del),g=games.find(x=>x.id===id);if(g&&confirm('Supprimer la partie du '+g.date+' ?')){games=games.filter(x=>x.id!==id);persist();render();if(editing===id)clearForm();say('Partie supprimée.')}}});
+$('export').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:2,exportedAt:new Date().toISOString(),names,games},null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='billard-sauvegarde-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
+$('import-trigger').addEventListener('click',()=>$('import-file').click());
+$('import-file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!x||!Array.isArray(x.games)||!x.games.every(g=>g&&Number.isSafeInteger(g.id)&&typeof g.date==='string'&&Number.isSafeInteger(g.pa)&&g.pa>=0&&Number.isSafeInteger(g.pb)&&g.pb>=0))throw Error('format');if(!confirm('Remplacer les parties actuelles par les '+x.games.length+' parties de cette sauvegarde ?'))return;games=x.games.map(g=>({...g}));if(Array.isArray(x.names)&&x.names.length===2)names=x.names.map((v,i)=>String(v||['Moi','Papa'][i]).slice(0,24));persist();render();clearForm();say('Sauvegarde restaurée.')}catch(err){say('Fichier invalide ou incompatible. Aucune donnée modifiée.')}finally{e.target.value=''}});
+$('reset').addEventListener('click',()=>{if(confirm('Effacer définitivement toutes les parties enregistrées dans ce navigateur ?')){games=[];persist();render();clearForm();say('Historique effacé.')}});
+function load(){try{const x=JSON.parse(localStorage.getItem(KEY)||'{}');games=Array.isArray(x.games)?x.games.map(g=>({...g})):[];if(Array.isArray(x.names)&&x.names.length===2)names=x.names.map((v,i)=>String(v||['Moi','Papa'][i]).slice(0,24))}catch(e){games=[]} $('date').value=today();syncNames();render()}
+load();
+if('serviceWorker' in navigator && location.protocol!=='file:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+})();
+</script>
+</body></html>

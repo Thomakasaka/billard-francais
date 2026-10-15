@@ -30,3 +30,8 @@ Avant de remplacer l’ancienne version, ouvre-la sur l’appareil qui contient 
 - Utilise **Exporter JSON** de temps en temps pour garder une sauvegarde indépendante.
 - Le service worker met en cache l’interface, pas les réponses privées de Supabase. Une connexion Internet est nécessaire pour charger et enregistrer l’historique.
 - Si tu modifies le code après publication, le service worker a été versionné pour forcer le renouvellement du cache ; si un téléphone affiche encore l’ancienne version, ferme/réouvre la webapp ou recharge la page.
+
+
+## Mise à jour : séries facultatives et reprises par défaut
+
+Si la base Supabase existe déjà, exécute `migration_series_facultatives.sql` dans le SQL Editor avant de publier cette version. Cette migration autorise les champs de meilleure série à rester vides. Les nouvelles parties proposent 25 reprises par défaut.

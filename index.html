@@ -55,8 +55,21 @@ input,select{width:100%;min-width:0;padding:11px;border:1px solid color-mix(in s
 </style>
 </head>
 <body>
-<main id="app">
+<section id="auth-screen" style="max-width:460px;margin:24px auto;padding:16px">
+  <header class="hero"><div class="eyebrow">ACCÈS PRIVÉ</div><h1>Billard français</h1><p>Connecte-toi pour retrouver les mêmes résultats sur les deux téléphones.</p></header>
+  <div class="card"><h2>Connexion</h2><div id="auth-message" aria-live="polite"></div>
+    <form id="login-form">
+      <label for="login-email">Adresse e-mail du compte partagé</label><input id="login-email" type="email" autocomplete="username" required placeholder="vous@exemple.fr">
+      <label for="login-password">Mot de passe</label><input id="login-password" type="password" autocomplete="current-password" required>
+      <button class="primary" id="login-button" type="submit">Se connecter</button>
+    </form>
+    <p class="note">Le compte doit être créé au préalable dans le tableau de bord Supabase. Il n’y a pas d’inscription publique.</p>
+  </div>
+</section>
+
+<main id="app" style="display:none">
 <header class="hero"><div class="eyebrow">CARNET DE MATCHS</div><h1>Billard français</h1><p>Scores · Reprises · Séries · Moyennes</p></header>
+<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px"><span id="sync-status" class="note" style="margin:0">Connexion sécurisée</span><button id="logout" class="secondary" type="button">Déconnexion</button></div>
 <nav class="tabs" aria-label="Navigation"><button class="tab active" data-tab="saisie">＋ Partie</button><button class="tab" data-tab="stats">↗ Statistiques</button><button class="tab" data-tab="historique">☷ Historique</button></nav>
 <div id="message" aria-live="polite"></div>
 <section class="panel active" id="panel-saisie">
@@ -88,10 +101,12 @@ input,select{width:100%;min-width:0;padding:11px;border:1px solid color-mix(in s
 <div class="card"><h2>Sauvegarde et restauration</h2><p class="note">Exporte tes données régulièrement. Pour transférer l'historique d'une autre version, importe son fichier JSON ici.</p><button class="secondary" id="import-trigger">Importer une sauvegarde JSON</button><input id="import-file" type="file" accept=".json,application/json" style="display:none;margin-top:10px"><button class="secondary" id="reset" style="margin-top:12px">Effacer toutes les parties</button></div>
 </section>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./config.js"></script>
 <script>
-(()=>{'use strict';
-const $=id=>document.getElementById(id),KEY='billard_francais_carnet_v1';
-let games=[],names=['Moi','Papa'],editing=null;
+(async()=>{'use strict';
+const $=id=>document.getElementById(id);
+let games=[],names=['Moi','Papa'],editing=null,supabase=null,currentUser=null;
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Number(n).toLocaleString('fr-FR',{maximumFractionDigits:3});
@@ -99,8 +114,9 @@ const reps=g=>Number.isSafeInteger(g.r)&&g.r>0?g.r:null;
 const repsFor=(g,k)=>reps(g)??Number(g['r'+k]||0);
 const seriesFor=(g,k)=>Number(g['s'+k]??g['max'+k]??0);
 const mean=(p,r)=>r>0?p/r:null;
-function say(t){$('message').innerHTML='<div class="toast">'+esc(t)+'</div>';setTimeout(()=>{$('message').innerHTML=''},3500)}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify({version:2,games,names}))}catch(e){say('Sauvegarde locale impossible. Exporte tes données.')}}
+function say(t){$('message').innerHTML='<div class="toast">'+esc(t)+'</div>'}
+function authSay(t){$('auth-message').innerHTML='<div class="toast">'+esc(t)+'</div>'}
+function syncStatus(t){$('sync-status').textContent=t}
 function syncNames(){for(let i=0;i<2;i++){$('name'+i+'-label').textContent=names[i];$('n'+i).value=names[i];$('chart-player').options[i].text=names[i]}}
 function ordered(){return [...games].sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id)}
 function stat(k){let p=0,r=0,w=0,bestMean=null,bestSeries=0;games.forEach(g=>{p+=Number(g['p'+k]||0);r+=repsFor(g,k);if((k===0&&g.pa>g.pb)||(k===1&&g.pb>g.pa))w++;let m=mean(g['p'+k],repsFor(g,k));if(m!==null&&(!bestMean||m>bestMean.value))bestMean={value:m,game:g};if(seriesFor(g,k)>bestSeries)bestSeries=seriesFor(g,k)});return{p,r,avg:mean(p,r),w,bestMean,bestSeries}}
@@ -118,21 +134,40 @@ function drawChart(){const k=Number($('chart-player').value),arr=ordered().filte
 function preview(){const r=Number($('reps').value);for(let i=0;i<2;i++){const p=$('p'+i).value;$('avg'+i).textContent=p!==''&&r>0?'Moyenne : '+fmt(Number(p)/r):'Moyenne : —'}}
 function clearForm(){editing=null;$('form-title').textContent='Enregistrer une partie';$('save').textContent='Enregistrer la partie';$('cancel').style.display='none';$('date').value=today();['reps','p0','p1','s0','s1','note'].forEach(id=>$(id).value='');preview()}
 function integer(id,min){const v=$(id).value;return v!==''&&Number.isSafeInteger(Number(v))&&Number(v)>=min}
+function toDb(g){const row={owner_user_id:currentUser.id,id:Number(g.id),date:g.date,r:reps(g),r0:Number(g.r0??0)||null,r1:Number(g.r1??0)||null,pa:Number(g.pa),pb:Number(g.pb),s0:Number(g.s0??g.maxa??0),s1:Number(g.s1??g.maxb??0),max0:Number(g.max0??0)||null,max1:Number(g.max1??0)||null,note:String(g.note||'').slice(0,180)};return row}
+function fromDb(g){return {id:Number(g.id),date:String(g.date).slice(0,10),r:g.r==null?null:Number(g.r),r0:g.r0==null?undefined:Number(g.r0),r1:g.r1==null?undefined:Number(g.r1),pa:Number(g.pa),pb:Number(g.pb),s0:Number(g.s0??g.max0??0),s1:Number(g.s1??g.max1??0),maxa:g.max0==null?undefined:Number(g.max0),maxb:g.max1==null?undefined:Number(g.max1),note:g.note||''}}
+async function saveGame(g){const {error}=await supabase.from('billard_games').upsert(toDb(g),{onConflict:'owner_user_id,id'});if(error)throw error}
+async function saveNames(){const {error}=await supabase.from('billard_settings').upsert({owner_user_id:currentUser.id,id:1,names},{onConflict:'owner_user_id,id'});if(error)throw error}
+async function refreshFromCloud(){syncStatus('Synchronisation en cours…');const [gr,sr]=await Promise.all([supabase.from('billard_games').select('id,date,r,r0,r1,pa,pb,s0,s1,max0,max1,note').order('date',{ascending:true}),supabase.from('billard_settings').select('names').eq('id',1).maybeSingle()]);if(gr.error)throw gr.error;if(sr.error)throw sr.error;games=(gr.data||[]).map(fromDb);if(sr.data&&Array.isArray(sr.data.names)&&sr.data.names.length===2)names=sr.data.names.map((v,i)=>String(v||['Moi','Papa'][i]).slice(0,24));else await saveNames();$('date').value=today();syncNames();render();syncStatus('Synchronisé · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}))}
+async function withSync(task){syncStatus('Enregistrement en cours…');try{await task();syncStatus('Synchronisé · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));return true}catch(e){console.error(e);say('Erreur de synchronisation : '+(e.message||'vérifie la connexion et la configuration Supabase.'));syncStatus('Synchronisation en échec');return false}}
+function showApp(){ $('auth-screen').style.display='none';$('app').style.display='block'; }
+function showLogin(){ $('app').style.display='none';$('auth-screen').style.display='block'; }
+async function onSession(session){currentUser=session?.user||null;if(!currentUser){showLogin();return}showApp();try{await refreshFromCloud()}catch(e){console.error(e);say('Impossible de charger les données en ligne : '+(e.message||'vérifie le SQL et les droits Supabase.'));syncStatus('Erreur de connexion à la base')}}
+if(!window.supabase||!window.BILLARD_CONFIG||!BILLARD_CONFIG.url||!BILLARD_CONFIG.anonKey||BILLARD_CONFIG.url.includes('VOTRE-PROJET')){authSay('Configuration manquante : renseigne config.js avec l’URL du projet Supabase et sa clé publique anon/publishable.');$('login-button').disabled=true;return}
+supabase=window.supabase.createClient(BILLARD_CONFIG.url,BILLARD_CONFIG.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+$('login-form').addEventListener('submit',async e=>{e.preventDefault();$('login-button').disabled=true;authSay('Connexion…');const {data,error}=await supabase.auth.signInWithPassword({email:$('login-email').value.trim(),password:$('login-password').value});$('login-button').disabled=false;if(error){authSay('Connexion impossible : '+error.message);return}authSay('Connexion réussie.');await onSession(data.session)});
+$('logout').addEventListener('click',async()=>{if(!confirm('Se déconnecter de ce téléphone ?'))return;await supabase.auth.signOut();games=[];showLogin();authSay('Tu es déconnecté.')});
+supabase.auth.onAuthStateChange((_event,session)=>{if(_event==='SIGNED_OUT'){currentUser=null;showLogin()} });
 document.querySelectorAll('#app [data-tab]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#app .tab').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('#app .panel').forEach(x=>x.classList.toggle('active',x.id==='panel-'+b.dataset.tab));render()}));
 ['reps','p0','p1','s0','s1'].forEach(id=>$(id).addEventListener('input',preview));
-$('save').addEventListener('click',()=>{if(!$('date').value){say('Choisis la date.');return}if(!integer('reps',1)){say('Indique un nombre commun de reprises supérieur à zéro.');return}for(let i=0;i<2;i++){if(!integer('p'+i,0)){say('Les points doivent être des nombres entiers positifs ou nuls.');return}if(!integer('s'+i,0)){say('Indique la plus grande série de chaque joueur.');return}if(Number($('s'+i).value)>Number($('p'+i).value)){say('La plus grande série ne peut pas dépasser le total des points.');return}}
-const g={id:editing??Date.now(),date:$('date').value,r:Number($('reps').value),pa:Number($('p0').value),pb:Number($('p1').value),s0:Number($('s0').value),s1:Number($('s1').value),note:$('note').value.trim().slice(0,180)};const i=games.findIndex(x=>x.id===g.id);if(i>=0){games[i]={...games[i],...g};delete games[i].ra;delete games[i].rb;delete games[i].maxa;delete games[i].maxb}else games.push(g);persist();render();clearForm();say(i>=0?'Partie corrigée et enregistrée.':'Partie enregistrée !')});
+$('save').addEventListener('click',async()=>{if(!$('date').value){say('Choisis la date.');return}if(!integer('reps',1)){say('Indique un nombre commun de reprises supérieur à zéro.');return}for(let i=0;i<2;i++){if(!integer('p'+i,0)){say('Les points doivent être des nombres entiers positifs ou nuls.');return}if(!integer('s'+i,0)){say('Indique la plus grande série de chaque joueur.');return}if(Number($('s'+i).value)>Number($('p'+i).value)){say('La plus grande série ne peut pas dépasser le total des points.');return}}
+const g={id:editing??Date.now(),date:$('date').value,r:Number($('reps').value),pa:Number($('p0').value),pb:Number($('p1').value),s0:Number($('s0').value),s1:Number($('s1').value),note:$('note').value.trim().slice(0,180)};const previous=games.findIndex(x=>x.id===g.id);if(previous>=0){g.r0=undefined;g.r1=undefined;g.maxa=undefined;g.maxb=undefined}const ok=await withSync(async()=>{await saveGame(g);if(previous>=0)games[previous]={...games[previous],...g};else games.push(g);render();clearForm();say(previous>=0?'Partie corrigée et synchronisée.':'Partie enregistrée et synchronisée.')});if(!ok)return});
 $('cancel').addEventListener('click',clearForm);
-$('save-names').addEventListener('click',()=>{const a=$('n0').value.trim(),b=$('n1').value.trim();if(!a||!b||a.toLocaleLowerCase()===b.toLocaleLowerCase()){say('Entre deux noms différents.');return}names=[a.slice(0,24),b.slice(0,24)];persist();render();say('Noms mis à jour.')});
+$('save-names').addEventListener('click',async()=>{const a=$('n0').value.trim(),b=$('n1').value.trim();if(!a||!b||a.toLocaleLowerCase()===b.toLocaleLowerCase()){say('Entre deux noms différents.');return}const old=names;names=[a.slice(0,24),b.slice(0,24)];const ok=await withSync(async()=>{await saveNames();render();say('Noms mis à jour sur les deux téléphones.')});if(!ok){names=old;render()}});
 $('chart-player').addEventListener('change',drawChart);$('filter').addEventListener('change',render);
-$('history').addEventListener('click',e=>{const ed=e.target.closest('[data-edit]'),del=e.target.closest('[data-del]');if(ed){const g=games.find(x=>x.id===Number(ed.dataset.edit));if(!g)return;editing=g.id;$('form-title').textContent='Corriger / modifier une partie';$('save').textContent='Enregistrer les modifications';$('cancel').style.display='block';$('date').value=g.date;$('p0').value=g.pa;$('p1').value=g.pb;$('s0').value=seriesFor(g,0);$('s1').value=seriesFor(g,1);$('note').value=g.note||'';$('reps').value=reps(g)??'';if(!reps(g))say('Ancienne partie : renseigne manuellement le nombre commun de reprises.');preview();document.querySelector('#app [data-tab="saisie"]').click();window.scrollTo({top:0,behavior:'smooth'})}if(del){const id=Number(del.dataset.del),g=games.find(x=>x.id===id);if(g&&confirm('Supprimer la partie du '+g.date+' ?')){games=games.filter(x=>x.id!==id);persist();render();if(editing===id)clearForm();say('Partie supprimée.')}}});
+$('history').addEventListener('click',async e=>{const ed=e.target.closest('[data-edit]'),del=e.target.closest('[data-del]');if(ed){const g=games.find(x=>x.id===Number(ed.dataset.edit));if(!g)return;editing=g.id;$('form-title').textContent='Corriger / modifier une partie';$('save').textContent='Enregistrer les modifications';$('cancel').style.display='block';$('date').value=g.date;$('p0').value=g.pa;$('p1').value=g.pb;$('s0').value=seriesFor(g,0);$('s1').value=seriesFor(g,1);$('note').value=g.note||'';$('reps').value=reps(g)??'';if(!reps(g))say('Ancienne partie : renseigne manuellement le nombre commun de reprises.');preview();document.querySelector('#app [data-tab="saisie"]').click();window.scrollTo({top:0,behavior:'smooth'})}if(del){const id=Number(del.dataset.del),g=games.find(x=>x.id===id);if(g&&confirm('Supprimer la partie du '+g.date+' ?')){const ok=await withSync(async()=>{const {error}=await supabase.from('billard_games').delete().eq('id',id);if(error)throw error;games=games.filter(x=>x.id!==id);render();if(editing===id)clearForm();say('Partie supprimée sur les deux téléphones.')})}}});
 $('export').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:2,exportedAt:new Date().toISOString(),names,games},null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='billard-sauvegarde-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
 $('import-trigger').addEventListener('click',()=>$('import-file').click());
-$('import-file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!x||!Array.isArray(x.games)||!x.games.every(g=>g&&Number.isSafeInteger(g.id)&&typeof g.date==='string'&&Number.isSafeInteger(g.pa)&&g.pa>=0&&Number.isSafeInteger(g.pb)&&g.pb>=0))throw Error('format');if(!confirm('Remplacer les parties actuelles par les '+x.games.length+' parties de cette sauvegarde ?'))return;games=x.games.map(g=>({...g}));if(Array.isArray(x.names)&&x.names.length===2)names=x.names.map((v,i)=>String(v||['Moi','Papa'][i]).slice(0,24));persist();render();clearForm();say('Sauvegarde restaurée.')}catch(err){say('Fichier invalide ou incompatible. Aucune donnée modifiée.')}finally{e.target.value=''}});
-$('reset').addEventListener('click',()=>{if(confirm('Effacer définitivement toutes les parties enregistrées dans ce navigateur ?')){games=[];persist();render();clearForm();say('Historique effacé.')}});
-function load(){try{const x=JSON.parse(localStorage.getItem(KEY)||'{}');games=Array.isArray(x.games)?x.games.map(g=>({...g})):[];if(Array.isArray(x.names)&&x.names.length===2)names=x.names.map((v,i)=>String(v||['Moi','Papa'][i]).slice(0,24))}catch(e){games=[]} $('date').value=today();syncNames();render()}
-load();
+$('import-file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!x||!Array.isArray(x.games)||!x.games.every(g=>g&&Number.isSafeInteger(Number(g.id))&&typeof g.date==='string'&&Number.isSafeInteger(Number(g.pa))&&Number(g.pa)>=0&&Number.isSafeInteger(Number(g.pb))&&Number(g.pb)>=0))throw Error('format');if(!confirm('Remplacer les parties en ligne par les '+x.games.length+' parties de cette sauvegarde ? Cette action affectera les deux téléphones.'))return;const incoming=x.games.map(g=>({...g,id:Number(g.id)}));const incomingNames=Array.isArray(x.names)&&x.names.length===2?x.names.map((v,i)=>String(v||['Moi','Papa'][i]).slice(0,24)):names;await withSync(async()=>{const {error:delError}=await supabase.from('billard_games').delete().eq('owner_user_id',currentUser.id);if(delError)throw delError;for(let i=0;i<incoming.length;i+=100){const rows=incoming.slice(i,i+100).map(toDb);if(rows.length){const {error}=await supabase.from('billard_games').upsert(rows,{onConflict:'owner_user_id,id'});if(error)throw error}}names=incomingNames;await saveNames();games=incoming;render();clearForm();say('Sauvegarde importée et synchronisée.')})}catch(err){console.error(err);say('Fichier invalide ou import impossible : '+(err.message||'erreur inconnue'))}finally{e.target.value=''}});
+$('reset').addEventListener('click',async()=>{if(confirm('Effacer définitivement toutes les parties en ligne ? Elles disparaîtront sur les deux téléphones.'))await withSync(async()=>{const {error}=await supabase.from('billard_games').delete().eq('owner_user_id',currentUser.id);if(error)throw error;games=[];render();clearForm();say('Historique en ligne effacé.')})});
 if('serviceWorker' in navigator && location.protocol!=='file:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+const {data:{session}}=await supabase.auth.getSession();
+onSession(session).catch(console.error);
+// Recharge les données quand on revient dans l’application, puis périodiquement si elle est ouverte.
+const refreshQuietly=()=>{if(currentUser && document.visibilityState==='visible' && editing===null)refreshFromCloud().catch(e=>console.error('Cloud refresh',e))};
+window.addEventListener('focus',refreshQuietly);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshQuietly()});
+setInterval(refreshQuietly,45000);
 })();
 </script>
 </body></html>

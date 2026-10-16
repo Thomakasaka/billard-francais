@@ -55,6 +55,16 @@ input,select{width:100%;min-width:0;padding:11px;border:1px solid color-mix(in s
 .rank.player0{border-left:3px solid var(--gold);padding-left:10px}.rank.player1{border-left:3px solid #438ac4;padding-left:10px}
 .score0{color:var(--gold)}.score1{color:#438ac4}
 .sync-footer{margin-top:18px}
+.stats-table-wrap{overflow-x:auto}
+.stats-table{width:100%;border-collapse:separate;border-spacing:3px;font-size:13px}
+.stats-table th,.stats-table td{padding:10px 8px;text-align:center;border-radius:7px}
+.stats-table thead th{background:color-mix(in srgb,CanvasText 6%,Canvas);font-weight:800}
+.stats-table thead th:first-child,.stats-table tbody th{text-align:left}
+.stats-table tbody th{font-weight:650;background:color-mix(in srgb,CanvasText 4%,Canvas)}
+.stats-table td{font-weight:800;font-variant-numeric:tabular-nums;background:color-mix(in srgb,CanvasText 2%,Canvas)}
+.stats-table td.best0{background:color-mix(in srgb,var(--gold) 38%,Canvas);color:CanvasText;box-shadow:inset 0 0 0 1px var(--gold)}
+.stats-table td.best1{background:color-mix(in srgb,#438ac4 38%,Canvas);color:CanvasText;box-shadow:inset 0 0 0 1px #438ac4}
+@media(max-width:420px){.stats-table{font-size:11px}.stats-table th,.stats-table td{padding:8px 5px}.stats-table tbody th{min-width:112px}}
 @media(min-width:520px){.metrics{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
@@ -93,11 +103,16 @@ input,select{width:100%;min-width:0;padding:11px;border:1px solid color-mix(in s
 <div class="card" style="display: none;"><h2>Noms des joueurs</h2><div class="settings"><div><label for="n0">Joueur 1</label><input id="n0" maxlength="24" value="Moi"></div><div><label for="n1">Joueur 2</label><input id="n1" maxlength="24" value="Papa"></div></div><button class="secondary" id="save-names" style="margin-top:10px">Enregistrer les noms</button></div>
 </section>
 <section class="panel" id="panel-stats">
-<div class="card"><h2>Bilan général</h2><div class="metrics"><div class="metric"><span>Parties</span><strong id="count">0</strong></div><div class="metric"><span class="player0-color" id="wins0-label">Victoires Tom</span><strong id="wins0">0</strong></div><div class="metric"><span class="player1-color" id="wins1-label">Victoires Papa</span><strong id="wins1">0</strong></div></div></div>
-<div class="card"><h2>Moyenne générale</h2><div id="avg-stats"></div></div>
-<div class="card"><h2>Total des points</h2><div id="total-stats"></div></div>
-<div class="card"><h2>Meilleures séries</h2><div id="series-stats"></div></div>
-<div class="card"><h2>Meilleures moyennes sur une partie</h2><div id="best-stats"></div></div>
+<div class="card"><h2>Bilan général</h2><div class="metric"><span>Parties enregistrées</span><strong id="count">0</strong></div></div>
+<div class="card"><h2>Comparaison des joueurs</h2><div class="stats-table-wrap"><table class="stats-table">
+<thead><tr><th>Statistique</th><th id="stats-name0" class="player0-color">Joueur 1</th><th id="stats-name1" class="player1-color">Joueur 2</th></tr></thead>
+<tbody>
+<tr><th scope="row">Victoires</th><td id="stat-wins0">0</td><td id="stat-wins1">0</td></tr>
+<tr><th scope="row">Moyenne générale</th><td id="stat-avg0">—</td><td id="stat-avg1">—</td></tr>
+<tr><th scope="row">Total des points</th><td id="stat-points0">0</td><td id="stat-points1">0</td></tr>
+<tr><th scope="row">Meilleure série</th><td id="stat-series0">—</td><td id="stat-series1">—</td></tr>
+<tr><th scope="row">Meilleure moyenne sur une partie</th><td id="stat-best0">—</td><td id="stat-best1">—</td></tr>
+</tbody></table></div><p class="note">La case du meilleur résultat est colorée selon le joueur. En cas d’égalité, les deux cases sont colorées.</p></div>
 <div class="card"><h2>Progression des moyennes</h2><div id="chart-legend" class="chart-legend"></div><div id="chart" style="margin-top:12px"></div></div>
 </section>
 <section class="panel" id="panel-historique">
@@ -123,17 +138,21 @@ const mean=(p,r)=>r>0?p/r:null;
 function say(t){$('message').innerHTML='<div class="toast">'+esc(t)+'</div>'}
 function authSay(t){$('auth-message').innerHTML='<div class="toast">'+esc(t)+'</div>'}
 function syncStatus(t){$('sync-status').textContent=t}
-function syncNames(){for(let i=0;i<2;i++){$('name'+i+'-label').textContent=names[i];$('n'+i).value=names[i]}$('wins0-label').textContent='Victoires '+names[0];$('wins1-label').textContent='Victoires '+names[1];$('chart-legend').innerHTML='<span class="player0-color">'+esc(names[0])+'</span><span class="player1-color">'+esc(names[1])+'</span>'}
+function syncNames(){for(let i=0;i<2;i++){$('name'+i+'-label').textContent=names[i];$('n'+i).value=names[i]}$('stats-name0').textContent=names[0];$('stats-name1').textContent=names[1];$('chart-legend').innerHTML='<span class="player0-color">'+esc(names[0])+'</span><span class="player1-color">'+esc(names[1])+'</span>'}
 function ordered(){return [...games].sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id)}
 function stat(k){let p=0,r=0,w=0,bestMean=null,bestSeries=null;games.forEach(g=>{const points=Number(k===0?g.pa:g.pb)||0;p+=points;r+=repsFor(g,k);if((k===0&&g.pa>g.pb)||(k===1&&g.pb>g.pa))w++;const m=mean(points,repsFor(g,k));if(m!==null&&(!bestMean||m>bestMean.value))bestMean={value:m,game:g};const series=seriesFor(g,k);if(series!==null&&Number.isFinite(series)&&(bestSeries===null||series>bestSeries))bestSeries=series});return{p,r,avg:mean(p,r),w,bestMean,bestSeries}}
 function legacy(g){return !reps(g)}
 function card(g,editable){const ra=repsFor(g,0),rb=repsFor(g,1),a=mean(g.pa,ra),b=mean(g.pb,rb),result=g.pa===g.pb?'Égalité':g.pa>g.pb?'Victoire '+names[0]:'Victoire '+names[1],winnerClass=g.pa===g.pb?'':g.pa>g.pb?'player0-color':'player1-color';return `<article class="match"><div class="topline"><span>${esc(g.date)} · ${legacy(g)?'reprises à corriger':reps(g)+' reprises'}</span><strong class="${winnerClass}">${esc(result)}</strong></div>${legacy(g)?'<div class="notice warning">Ancienne partie : corrige manuellement le nombre commun de reprises.</div>':''}<div class="scores"><div><strong class="score0">${fmt(g.pa)}</strong><small class="player0-color">${esc(names[0])}</small><small>Moy. ${a===null?'—':fmt(a)} · série ${seriesFor(g,0)===null?'—':fmt(seriesFor(g,0))}</small></div><div>VS</div><div><strong class="score1">${fmt(g.pb)}</strong><small class="player1-color">${esc(names[1])}</small><small>Moy. ${b===null?'—':fmt(b)} · série ${seriesFor(g,1)===null?'—':fmt(seriesFor(g,1))}</small></div></div>${g.note?`<div class="note" style="text-align:center">${esc(g.note)}</div>`:''}${editable?`<div class="actions"><button class="secondary" data-edit="${g.id}">Corriger / modifier</button><button class="secondary" data-del="${g.id}">Supprimer</button></div>`:''}</article>`}
 function rank(name,value,sub,k){const playerClass=k===0?'player0':k===1?'player1':'';const colorClass=k===0?'player0-color':k===1?'player1-color':'';return `<div class="rank ${playerClass}"><div><strong class="${colorClass}">${esc(name)}</strong><small>${sub}</small></div><strong class="${colorClass}">${value}</strong></div>`}
-function render(){syncNames();const A=stat(0),B=stat(1);$('count').textContent=games.length;$('wins0').textContent=A.w;$('wins1').textContent=B.w;
-$('avg-stats').innerHTML=[A,B].map((s,i)=>rank(names[i],s.avg===null?'—':fmt(s.avg),'Total : '+fmt(s.p)+' points / '+fmt(s.r)+' reprises',i)).join('');
-$('total-stats').innerHTML=[A,B].map((s,i)=>rank(names[i],fmt(s.p)+' pts',s.w+' victoire(s)',i)).join('');
-$('series-stats').innerHTML=[A,B].map((s,i)=>{const g=s.bestSeries===null?null:games.filter(x=>seriesFor(x,i)===s.bestSeries).sort((x,y)=>y.date.localeCompare(x.date))[0];return rank(names[i],s.bestSeries===null?'—':fmt(s.bestSeries)+' pts',g?'Meilleure série · '+g.date:'Aucune série enregistrée',i)}).join('');
-$('best-stats').innerHTML=[A,B].map((s,i)=>rank(names[i],s.bestMean?fmt(s.bestMean.value):'—',s.bestMean?'Le '+s.bestMean.game.date+' · '+(i===0?s.bestMean.game.pa:s.bestMean.game.pb)+' points en '+repsFor(s.bestMean.game,i)+' reprises':'Aucune partie',i)).join('');
+function render(){syncNames();const A=stat(0),B=stat(1);$('count').textContent=games.length;
+const rows=[
+{ids:['stat-wins0','stat-wins1'],values:[A.w,B.w],display:[fmt(A.w),fmt(B.w)]},
+{ids:['stat-avg0','stat-avg1'],values:[A.avg,B.avg],display:[A.avg===null?'—':fmt(A.avg),B.avg===null?'—':fmt(B.avg)]},
+{ids:['stat-points0','stat-points1'],values:[A.p,B.p],display:[fmt(A.p)+' pts',fmt(B.p)+' pts']},
+{ids:['stat-series0','stat-series1'],values:[A.bestSeries,B.bestSeries],display:[A.bestSeries===null?'—':fmt(A.bestSeries)+' pts',B.bestSeries===null?'—':fmt(B.bestSeries)+' pts']},
+{ids:['stat-best0','stat-best1'],values:[A.bestMean?.value??null,B.bestMean?.value??null],display:[A.bestMean?fmt(A.bestMean.value):'—',B.bestMean?fmt(B.bestMean.value):'—']}
+];
+rows.forEach(row=>{row.ids.forEach((id,i)=>{const cell=$(id);cell.textContent=row.display[i];cell.classList.remove('best0','best1')});const [v0,v1]=row.values;if(v0!==null&&v1!==null&&Number.isFinite(v0)&&Number.isFinite(v1)){if(v0>v1)$(row.ids[0]).classList.add('best0');else if(v1>v0)$(row.ids[1]).classList.add('best1');else{$(row.ids[0]).classList.add('best0');$(row.ids[1]).classList.add('best1')}}else if(v0!==null&&Number.isFinite(v0)&&v1===null)$(row.ids[0]).classList.add('best0');else if(v1!==null&&Number.isFinite(v1)&&v0===null)$(row.ids[1]).classList.add('best1')});
 const old=games.filter(legacy).length;$('legacy-notice').style.display=old?'block':'none';$('legacy-notice').textContent=old+' ancienne(s) partie(s) à corriger : ouvre chacune avec « Corriger / modifier » pour renseigner le nombre commun de reprises et les séries.';
 const sorted=ordered().reverse(),f=$('filter').value,cut=new Date();cut.setDate(cut.getDate()-Number(f));const list=sorted.filter(g=>f==='all'||g.date>=cut.toISOString().slice(0,10));$('history').innerHTML=list.length?list.map(g=>card(g,true)).join(''):'<div class="empty">Aucune partie enregistrée.</div>';drawChart()}
 function drawChart(){const arr=ordered().filter(g=>reps(g)>0);if(!arr.length){$('chart').innerHTML='<div class="empty">Les moyennes apparaîtront ici.</div>';return}const vals0=arr.map(g=>Number(g.pa)/reps(g)),vals1=arr.map(g=>Number(g.pb)/reps(g)),max=Math.max(...vals0,...vals1,.1),w=320,h=145,l=30,t=12,iw=282,ih=95,x=i=>l+(arr.length===1?iw/2:i*iw/(arr.length-1)),y=v=>t+ih-v/max*ih;let s=`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Progression des moyennes de ${esc(names[0])} et ${esc(names[1])}">`;for(let i=0;i<3;i++){const yy=t+i*ih/2;s+=`<line x1="${l}" y1="${yy}" x2="312" y2="${yy}" stroke="color-mix(in srgb,CanvasText 18%,transparent)"/><text x="25" y="${yy+3}" text-anchor="end" font-size="9" fill="CanvasText">${fmt(max*(1-i/2))}</text>`}for(const [vals,color,name] of [[vals0,'#d4a72c',names[0]],[vals1,'#438ac4',names[1]]]){const pts=vals.map((v,i)=>[x(i),y(v)]);if(pts.length>1)s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${color}" stroke-width="2.5"/>`;pts.forEach((p,i)=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="${color}"><title>${esc(name)} · ${esc(arr[i].date)} : ${fmt(vals[i])}</title></circle>`)}s+=`<text x="${l}" y="139" font-size="9" fill="CanvasText">${esc(arr[0].date)}</text><text x="312" y="139" text-anchor="end" font-size="9" fill="CanvasText">${esc(arr[arr.length-1].date)}</text></svg>`;$('chart').innerHTML=s}
